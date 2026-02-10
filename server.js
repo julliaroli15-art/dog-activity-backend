@@ -2,7 +2,12 @@ const express = require("express");
 const app = express();
 
 app.use(express.json());
-
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  next();
+});
 // -------- CONFIGURACIÓN --------
 const API_USER = "xiao";
 const API_PASSWORD = "1234";
@@ -67,3 +72,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Servidor activo en puerto", PORT);
 });
+
