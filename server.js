@@ -17,6 +17,11 @@ let lastActivity = {
 
 let weeklyHistory = []; // [{ date, activityIndex }]
 
+// -------- RUTA RAÍZ (TEST) --------
+app.get("/", (req, res) => {
+  res.send("FeedFit backend activo 🚀");
+});
+
 // -------- AUTENTICACIÓN --------
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -60,5 +65,5 @@ app.get("/api/activity/week", (req, res) => {
 // -------- SERVER --------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("Servidor activo");
+  console.log("Servidor activo en puerto", PORT);
 });
