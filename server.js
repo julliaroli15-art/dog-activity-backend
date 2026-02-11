@@ -2,17 +2,20 @@ const express = require("express");
 const app = express();
 
 app.use(express.json());
+
+// -------- CORS --------
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   next();
 });
+
 // -------- CONFIGURACIÓN --------
 const API_USER = "xiao";
 const API_PASSWORD = "1234";
 
-// -------- ALMACENAMIENTO SIMPLE --------
+// -------- ALMACENAMIENTO --------
 let lastActivity = {
   reposo: 0,
   caminar: 0,
@@ -20,14 +23,20 @@ let lastActivity = {
   sprint: 0
 };
 
-let weeklyHistory = []; // [{ date, activityIndex }]
+let dogProfile = {
+  size: "mini",      // mini | standard | giant
+  ageMonths: 12,
+  weight: 5,
+  neutered: false,
+  kcalPerGram: 3.8
+};
 
-// -------- RUTA RAÍZ (TEST) --------
+// -------- RUTA TEST --------
 app.get("/", (req, res) => {
   res.send("FeedFit backend activo 🚀");
 });
 
-// -------- AUTENTICACIÓN --------
+// -------- AUTH --------
 function auth(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.sendStatus(401);
@@ -44,27 +53,83 @@ function auth(req, res, next) {
   }
 }
 
-// -------- XIAO ENVÍA DATOS --------
+// -------- ACTUALIZAR PERFIL PERRO --------
+app.post("/api/dog", (req, res) => {
+  dogProfile = req.body;
+  res.sendStatus(200);
+});
+
+// -------- XIAO ENVÍA ACTIVIDAD --------
 app.post("/api/activity", auth, (req, res) => {
   lastActivity = req.body;
-  console.log("Datos recibidos:", lastActivity);
   res.sendStatus(200);
 });
 
-// -------- APP LEE DATOS --------
-app.get("/api/activity/today", (req, res) => {
-  res.json(lastActivity);
-});
+// -------- CÁLCULO ENERGÉTICO --------
+function calculateEnergy() {
 
-// -------- HISTÓRICO SEMANAL --------
-app.post("/api/activity/history", (req, res) => {
-  weeklyHistory.push(req.body);
-  if (weeklyHistory.length > 7) weeklyHistory.shift();
-  res.sendStatus(200);
-});
+  const { size, ageMonths, weight, neutered, kcalPerGram } = dogProfile;
+  const { reposo, caminar, correr, sprint } = lastActivity;
 
-app.get("/api/activity/week", (req, res) => {
-  res.json(weeklyHistory);
+  // 1️⃣ RER
+  const RER = 70 * Math.pow(weight, 0.75);
+
+  // 2️⃣ FACTOR EDAD
+  let ageFactor = 1;
+
+  if (ageMonths <= 4) {
+    ageFactor = 3;
+  } else if (
+    (size === "mini" && ageMonths <= 12) ||
+    (size === "standard" && ageMonths <= 14) ||
+    (size === "giant" && ageMonths <= 18)
+  ) {
+    ageFactor = 2;
+  } else {
+    // adulto o senior
+    if (
+      (size === "mini" && ageMonths >= 132) ||
+      (size === "standard" && ageMonths >= 108) ||
+      (size === "giant" && ageMonths >= 84)
+    ) {
+      ageFactor = 1.3; // senior
+    } else {
+      ageFactor = 1.6; // adulto normal
+    }
+  }
+
+  // 3️⃣ AJUSTE CASTRACIÓN (solo adultos/senior)
+  if (neutered && ageFactor <= 1.6) {
+    ageFactor *= 0.85;
+  }
+
+  // 4️⃣ kcal por minuto en reposo
+  const kcalPerMinute = RER / 1440;
+
+  // 5️⃣ multiplicadores actividad
+  const activityKcal =
+    reposo * kcalPerMinute * 1 +
+    caminar * kcalPerMinute * 1.5 +
+    correr * kcalPerMinute * 2.5 +
+    sprint * kcalPerMinute * 4;
+
+  // 6️⃣ aplicar factor edad
+  const totalKcal = activityKcal * (ageFactor / 1.6);
+
+  // 7️⃣ gramos
+  const grams = totalKcal / kcalPerGram;
+
+  return {
+    RER: Math.round(RER),
+    totalKcal: Math.round(totalKcal),
+    grams: Math.round(grams)
+  };
+}
+
+// -------- APP LEE RESULTADOS --------
+app.get("/api/recommendation", (req, res) => {
+  const result = calculateEnergy();
+  res.json(result);
 });
 
 // -------- SERVER --------
@@ -72,4 +137,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Servidor activo en puerto", PORT);
 });
+
+
 
