@@ -24,9 +24,9 @@ let lastActivity = {
 };
 
 let dogProfile = {
-  size: "mini",      // mini | standard | giant
+  size: "mini",
   ageMonths: 12,
-  weight: 5,
+  weight: 10,
   neutered: false,
   kcalPerGram: 3.8
 };
@@ -62,19 +62,20 @@ app.post("/api/dog", (req, res) => {
 // -------- XIAO ENVÍA ACTIVIDAD --------
 app.post("/api/activity", auth, (req, res) => {
   lastActivity = req.body;
+  console.log("Actividad recibida:", lastActivity);
   res.sendStatus(200);
 });
 
-// -------- CÁLCULO ENERGÉTICO --------
+// -------- CÁLCULO ENERGÉTICO CORRECTO --------
 function calculateEnergy() {
 
   const { size, ageMonths, weight, neutered, kcalPerGram } = dogProfile;
   const { reposo, caminar, correr, sprint } = lastActivity;
 
-  // 1️⃣ RER
+  // 1️⃣ RER (metabolismo basal)
   const RER = 70 * Math.pow(weight, 0.75);
 
-  // 2️⃣ FACTOR EDAD
+  // 2️⃣ Factor edad
   let ageFactor = 1;
 
   if (ageMonths <= 4) {
@@ -86,38 +87,44 @@ function calculateEnergy() {
   ) {
     ageFactor = 2;
   } else {
-    // adulto o senior
     if (
       (size === "mini" && ageMonths >= 132) ||
       (size === "standard" && ageMonths >= 108) ||
       (size === "giant" && ageMonths >= 84)
     ) {
-      ageFactor = 1.3; // senior
+      ageFactor = 1.3;
     } else {
-      ageFactor = 1.6; // adulto normal
+      ageFactor = 1.6;
     }
   }
 
-  // 3️⃣ AJUSTE CASTRACIÓN (solo adultos/senior)
+  // 3️⃣ Ajuste por castración
   if (neutered && ageFactor <= 1.6) {
     ageFactor *= 0.85;
   }
 
-  // 4️⃣ kcal por minuto en reposo
-  const kcalPerMinute = RER / 1440;
+  // 4️⃣ Energía base diaria (SIEMPRE existe)
+  let totalKcal = RER * ageFactor;
 
-  // 5️⃣ multiplicadores actividad
-  const activityKcal =
-    reposo * kcalPerMinute * 1 +
-    caminar * kcalPerMinute * 1.5 +
-    correr * kcalPerMinute * 2.5 +
-    sprint * kcalPerMinute * 4;
+  // 5️⃣ Ajuste por actividad si hay datos
+  const totalMinutes = reposo + caminar + correr + sprint;
 
-  // 6️⃣ aplicar factor edad
-  const totalKcal = activityKcal * (ageFactor / 1.6);
+  if (totalMinutes > 0) {
+    const weightedActivity =
+      reposo * 1 +
+      caminar * 1.5 +
+      correr * 2.5 +
+      sprint * 4;
 
-  // 7️⃣ gramos
-  const grams = totalKcal / kcalPerGram;
+    const activityMultiplier = weightedActivity / totalMinutes;
+
+    totalKcal *= activityMultiplier;
+  }
+
+  // 6️⃣ Protección contra valores inválidos
+  const safeKcalPerGram = (kcalPerGram && kcalPerGram > 0) ? kcalPerGram : 3.8;
+
+  const grams = totalKcal / safeKcalPerGram;
 
   return {
     RER: Math.round(RER),
@@ -137,6 +144,8 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Servidor activo en puerto", PORT);
 });
+
+
 
 
 
